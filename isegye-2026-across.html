@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>굿즈 계산기 — 다모아</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#141c33">
+<style>
+/* ===== 다모아 공용 토큰 (ui_tokens — 바람문고도 같은 것을 쓴다) ===== */
+:root{
+  --navy:#141c33; --navy2:#1d2947; --gold:#c9a45c; --gold2:#e2c78e;
+  --ink:#16203a; --muted:#8b93a3; --paper:#eef0f4; --card:#fff; --line:#e3e6ec;
+  --accent:#2d6cdf; --ok:#1e8e54; --warn:#b8860b; --danger:#c0392b;
+  /* 본문 최대 폭 — **모든 화면이 같다** (UI v1.6, 2026-10-16, 사용자 요청 — "최대폭을 정해놓고 접속한 매체에
+     따라서 반응형으로 … 모두 일정하면 좋을 것 같아"). 예전엔 화면마다 ui_page_open(['max'=>…]) 로 달리 줘서
+     560·720·760·900·1000·1080·1100·1180·1240·1280·1320 **열한 가지**였다 — 화면을 옮길 때마다 글이 시작하는
+     자리가 바뀌었다. 가장 넓은 표(아파트 실거래가)가 들어가는 값으로 맞췄다.
+     **화면에서 이 값을 다시 정하지 말 것** — 그러면 다시 제각각이 된다. */
+  /* 글자 크기 단계(UI v1.9). 장식 이모지와 표지 그림 크기는 별도다. */
+  --fs-xs:11px; --fs-s:12px; --fs-m:13px; --fs-base:14.5px; --fs-l:17px; --fs-xl:21px;
+  --page-max:1320px;
+  /* 좌우 여백 — 이것이 '반응형' 을 맡는다. .wrap 이 max-width 라서 화면이 좁으면 저절로 줄고,
+     그 안에서 여백만 화면 너비를 따라간다(휴대폰 16px → 큰 화면 32px 에서 멈춤). */
+  --gutter:clamp(16px,4vw,32px);
+  --bar-h:58px;
+  --top-h:var(--bar-h);   /* 지금 화면 위에 붙어 있는 높이(바 + 탭). 숨기면 0 — 붙는(sticky) 요소는 이만큼 띄운다 (UI v1.5) */
+  --r-sm:8px; --r:12px; --r-lg:16px;
+  --sans:Pretendard,-apple-system,BlinkMacSystemFont,system-ui,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  /* 스크롤바 자리를 늘 비워 둔다 (UI v1.6) — 안 그러면 **스크롤이 생기는 화면과 안 생기는 화면의 본문이
+     7px 어긋난다**(1,600px 창에서 왼쪽 133 ↔ 140). 화면을 옮길 때 글이 들썩이던 것이 이것이다.
+     :root 가 곧 html 이라 여기 적으면 걸리고, 공용 CSS 를 안 싣는 바람문고도 ui_tokens() 로 함께 받는다.
+     모르는 브라우저는 예전처럼 동작할 뿐이라 깨지지 않는다. */
+  scrollbar-gutter:stable;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);
+     font-family:var(--sans);font-size:14.5px;line-height:1.6}
+
+/* ===== 상단 띠 =====
+   **스크롤해도 늘 보인다**(UI v1.5, 2026-10-14, 사용자 — "상단 띠는 계속 보이게 하면서 숨기는 버튼").
+   붙어 있는 것은 바(.tbar)와 탭뿐이다 — 포털 인사말·주식 앱 띠 같은 `below` 는 바깥 .top-below 로 꺼내
+   스크롤하면 위로 지나간다(통째로 붙이면 화면 절반을 가린다).
+   둘로 나뉘어도 이음매가 안 보이게 **색은 가로(90deg) 그라데이션**이다 — 대각선이면 높이가 다른 두 상자의 색이 어긋난다.
+   바 끝 ▴ 로 숨기면 위 가장자리에 ▾ 손잡이만 남는다. 고른 것은 이 브라우저에 기억한다(ui.bar). */
+html{scroll-padding-top:var(--top-h)}            /* #주소로 뛰어도 붙은 바 밑에 숨지 않게 */
+.top{background:linear-gradient(90deg,var(--navy),var(--navy2));color:#eef1f8;position:sticky;top:0;z-index:40}
+.top-below{background:linear-gradient(90deg,var(--navy),var(--navy2));color:#eef1f8}
+html.ui-bar-off .top{display:none}
+.tbar .ui-hide{flex:none;appearance:none;-webkit-appearance:none;border:0;background:rgba(255,255,255,.08);color:#c6cede;
+  width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:12px;line-height:1;padding:0;font-family:inherit}
+.tbar .ui-hide:hover{background:rgba(255,255,255,.16);color:#fff}
+.ui-show{display:none;position:fixed;top:0;right:max(12px,calc((100vw - var(--page-max)) / 2 + var(--gutter)));z-index:41;
+  appearance:none;-webkit-appearance:none;border:0;cursor:pointer;font-family:inherit;
+  background:var(--navy);color:var(--gold2);font-size:12px;font-weight:600;padding:3px 13px 5px;border-radius:0 0 10px 10px;
+  box-shadow:0 4px 12px rgba(20,28,51,.25)}
+html.ui-bar-off .ui-show{display:block}
+@media print{.top{position:static}.ui-show,.tbar .ui-hide{display:none}}
+.tbar{max-width:var(--page-max);margin:0 auto;padding:0 var(--gutter);display:flex;align-items:center;gap:11px;height:var(--bar-h)}   /* 여백을 안쪽에 — 본문(.wrap)과 글자 줄이 맞는다 */
+.tbar .mark{font-size:19px;flex:none;line-height:1}
+.tbar h1{font-size:16.5px;margin:0;flex:1;font-weight:700;min-width:0;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbar .u{font-size:12px;color:#c6cede;flex:none}
+.tbar a{color:var(--gold2);font-size:12.5px;text-decoration:none;font-weight:600;flex:none}
+.tbar a:hover{color:#fff}
+.tabs{max-width:var(--page-max);margin:0 auto;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.top .tabs{padding:0 var(--gutter)}   /* 여백은 머리띠 안의 탭에만 — 본문에서 .tabs 이름을 쓰는 알약 줄까지 들여 쓰였다 */
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{background:none;border:0;color:#aab3c7;font-family:inherit;font-size:13.5px;font-weight:600;
+  padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button.on{color:#fff;border-bottom-color:var(--gold)}
+
+/* ===== 본문 =====
+   폭은 --page-max 하나로 모든 화면이 같다(UI v1.6). 화면 CSS 에서 .wrap 의 max-width 를 다시 쓰지 말 것.
+   좌우 여백은 --gutter. 예전엔 4vw 라서, 최대 폭(여백 포함) 안의 내용이 화면이 넓을수록 오히려 좁아졌다
+   (1,400px 창 1,208px → 1,920px 전체화면 1,166px). 넓은 화면에서는 32px 에서 멈춘다 (UI v1.2)
+
+   **내용이 한 칸뿐인 화면은 .wrap.narrow 로 가운데 모은다** — 알림·앱 받기처럼 글과 단추뿐인 화면을
+   1,320px 로 펼치면 한 줄이 너무 길어 읽기 어렵다. 폭(바깥 테두리)은 그대로 두고 **안쪽 내용만** 좁히는
+   것이라 상단 띠·본문 시작 자리는 다른 화면과 어긋나지 않는다. ui_main_open(['narrow'=>true]) 로 켠다. */
+.wrap{max-width:var(--page-max);margin:18px auto 60px;padding:0 var(--gutter)}
+.wrap.narrow>*{max-width:760px;margin-left:auto;margin-right:auto}
+
+/* ===== 카드 ( .sec / .panel 은 기존 페이지 호환용 별칭 ) ===== */
+.card,.sec,.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:17px 19px;margin-bottom:16px;box-shadow:0 3px 12px rgba(22,32,58,.05)}
+.card>h2,.sec>h2{font-size:15px;margin:0 0 4px}
+.card>h3,.panel>h3{font-size:14px;margin:0 0 12px}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;display:block;margin-bottom:12px}
+/* 접어 두는 설명(UI v1.8, 2026-10-29, 사용자 — "쓸데없는 설명이 작은 글씨로 적혀있는 경우가 많아").
+   계산 방법·주의·자료 출처 같은 긴 설명에 .help 를 달면 기본으로 숨고, 그런 글이 있는 화면에만
+   머리띠에 'ⓘ 설명' 단추가 생겨 한꺼번에 편다(ui_page_close 의 스크립트, 켬은 이 브라우저에 기억 — 모든 화면 공통) */
+html:not(.ui-help-on) .help{display:none!important}
+/* 머리띠 링크(⌂ 포털 등)와 같은 글자 — 예전엔 띠 글자(더 큼)를 이어받아 혼자 커 보였다(2026-11-01, 사용자) */
+.tbar .ui-help{appearance:none;border:0;background:none;font-family:inherit;color:var(--gold2);font-size:12.5px;font-weight:600;cursor:pointer;padding:0;flex:none;line-height:inherit}   /* 단추는 line-height 가 normal 이라 ⌂ 포털(a)보다 글자가 1.5px 낮았다(2026-11-06, 사용자 — "줄이 안맞다") */
+.tbar .ui-help:hover{color:#fff}
+html.ui-help-on .tbar .ui-help{text-decoration:underline}
+.tbar .ui-split{appearance:none;border:0;background:none;font-family:inherit;color:var(--gold2);font-size:var(--fs-l);cursor:pointer;padding:0;flex:none;line-height:inherit}
+.tbar .ui-split:hover{color:var(--card)}
+
+/* ===== 통계 타일 ===== */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.st{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+.st .k{font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.st .v{font-size:17px;font-weight:700;line-height:1.3}
+.st .v small{font-size:11px;font-weight:400;color:var(--muted)}
+
+/* ===== 버튼 ===== */
+.btn{padding:8px 15px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;color:var(--ink);
+  font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;line-height:1.4}
+.btn:hover{border-color:#bcc6d8}
+.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.primary:hover{background:var(--navy2)}
+.btn.danger{color:var(--danger);border-color:#f0c8c8}
+.btn.danger:hover{background:#fdf3f3}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted);font-weight:500}
+.btn.sm{padding:5px 10px;font-size:12px;font-weight:500}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* ===== 입력 ===== */
+input[type=text],input[type=number],input[type=date],input[type=password],select,textarea{
+  padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  font-family:inherit;font-size:13.5px;color:var(--ink);background:#fff;min-width:0;max-width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input::placeholder{color:#b3bac7}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.frow{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.frow label{font-size:11px;color:var(--muted)}
+.frow label>input,.frow label>select{display:block;margin-top:3px}
+
+/* ===== 알림·상태 ===== */
+.sync{font-size:11.5px;color:var(--muted)}
+.sync.err{color:var(--danger)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:5px 11px;font-size:12.5px;
+  cursor:pointer;user-select:none;background:#fff;margin:0 6px 6px 0}
+.pill.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tag{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:7px;padding:3px 8px}
+.note{background:#fff4f4;border:1px solid #f0c8c8;color:#8a2b2b;border-radius:14px;
+  padding:14px 16px;font-size:13px;line-height:1.7;margin-bottom:16px}
+.warnbox{background:#fff8e6;border:1px solid #f0dfae;color:#7a5c12;border-radius:var(--r);
+  padding:10px 13px;font-size:12.5px;line-height:1.65;margin-bottom:12px}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:36px 10px;line-height:1.8}
+
+/* ===== 가운데 놓인 인증 카드 (회원가입·비밀번호 변경) =====
+   body 에 class="auth" 를 주면 화면 한가운데 정렬된다 */
+body.auth{display:flex;align-items:center;justify-content:center;padding:24px 0}
+.authcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:30px 27px;width:min(380px,92vw);box-shadow:0 8px 30px rgba(22,32,58,.08);margin:0}
+.authcard h1{font-size:19px;margin:0 0 4px}
+.authcard .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+.authcard label{display:block;font-size:12px;color:var(--muted);margin:0 0 5px 2px}
+.authcard input{width:100%;padding:12px 14px;margin-bottom:11px;font-size:15px;border-radius:10px}
+.authcard button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--navy);
+  color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+.authcard button:hover{background:var(--navy2)}
+.authcard .switch{text-align:center;margin-top:16px;font-size:13px;color:var(--muted)}
+.authcard .switch a{color:var(--accent);text-decoration:none;font-weight:600}
+.msg-err{background:#fdeaea;color:var(--danger);border:1px solid #f3c1c1;
+  border-radius:var(--r-sm);padding:9px 12px;font-size:13px;margin-bottom:12px}
+.msg-ok{background:#eafaf0;color:var(--ok);border:1px solid #bfe8cf;
+  border-radius:var(--r-sm);padding:9px 12px;font-size:13px;margin-bottom:12px}
+
+/* ===== 접근성·모바일 ===== */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(max-width:560px){
+  .tbar{gap:8px}
+  .tbar .u{display:none}
+  .card,.sec,.panel{padding:14px 15px;border-radius:14px}
+}
+
+/* UI v1.9 — 요청한 다섯 화면만 새 단계와 입력 모양을 쓴다. 주식 앱은 기존 규칙을 유지한다. */
+/* 단추·입력의 브라우저 기본 글자(13.3333px)를 걷는다(UI v1.9 후속, 2026-11-10). :where 로 감싸 우선순위 0 —
+   .btn·.tabs button·.pair input 처럼 이미 글자를 정한 규칙은 그대로 이기고, 정하지 않은 단추·입력만 이 값을 받는다.
+   body_class 가 다섯 화면에만 걸리므로 주식 앱(및 다른 화면)은 영향이 없다. */
+:where(body:is(.home,.app-divstat,.app-music,.app-ev,.app-train)) :where(button,input,select,textarea){font-family:inherit;font-size:var(--fs-m)}
+body.app-train input[type=time]{font-family:inherit;font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train){font-size:var(--fs-base)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tbar .ui-hide{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .ui-show{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tbar h1{font-size:var(--fs-l)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tbar .u{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tbar a{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tabs button{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .card>h2,body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .sec>h2{font-size:var(--fs-base)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .card>h3,body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .panel>h3{font-size:var(--fs-base)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .hint{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tbar .ui-help{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .st .k{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .st .v{font-size:var(--fs-l)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .st .v small{font-size:var(--fs-xs)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .btn{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .btn.sm{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) input[type=text],body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) input[type=number],body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) input[type=date],body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) input[type=password],body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) select,body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) textarea{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .frow label{font-size:var(--fs-xs)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .sync{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .pill{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .tag{font-size:var(--fs-xs)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .note{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .warnbox{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .empty{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard h1{font-size:var(--fs-l)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard .sub{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard label{font-size:var(--fs-s)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard input{font-size:var(--fs-base)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard button{font-size:var(--fs-base)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .authcard .switch{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .msg-err{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) .msg-ok{font-size:var(--fs-m)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) :is(input:not([type]),input[type=text],input[type=search],input[type=number],select),body.home input[type=password]{
+  box-sizing:border-box;height:36px;border-radius:8px;padding:0 10px;border:1px solid var(--line);
+  font-family:inherit;font-size:var(--fs-m);color:var(--ink);background:var(--card);max-width:100%}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) :is(input:not([type]),input[type=text],input[type=search],input[type=number],select):focus,body.home input[type=password]:focus{
+  outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:2px;border-color:var(--accent)}
+body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) :is(input:not([type]),input[type=text],input[type=search],input[type=number],select)::placeholder,body.home input[type=password]::placeholder{color:var(--muted)}
+.ui-icon{width:16px;height:16px;display:inline-block;vertical-align:-3px;flex:none;pointer-events:none}
+</style>
+<style>
+.gd-intro{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:var(--r-lg);padding:18px 20px;margin:0 0 16px}
+.gd-intro h2{margin:0 0 4px;font-size:var(--fs-xl);color:#fff}.gd-intro p{margin:0;opacity:.85;font-size:var(--fs-s)}.gd-intro .gd-new{background:var(--gold);color:var(--navy);border-color:var(--gold);font-weight:700}
+.gd-evgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:14px}
+.gd-evcard{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;color:var(--ink);text-decoration:none;transition:transform .15s,box-shadow .15s}
+.gd-evcard:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(20,28,51,.12)}
+.gd-cover{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:92px;gap:2px;background:var(--line)}.gd-cover img{width:100%;height:100%;object-fit:cover;background:var(--paper)}
+.gd-cover-none{display:flex;align-items:center;justify-content:center;height:140px;font-size:48px;background:var(--paper)}
+.gd-evbody{padding:14px 16px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+.gd-evbody h3{margin:2px 0 4px;font-size:var(--fs-m);line-height:1.35;color:var(--navy)}
+.gd-evmeta{margin:0;font-size:var(--fs-s);color:var(--muted)}
+.gd-evfoot{margin:auto 0 0;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--muted)}.gd-evfoot .gd-event-count{color:var(--navy);font-weight:700}
+.gd-dday{align-self:flex-start;font-size:var(--fs-xs);font-weight:800;padding:2px 9px;border-radius:999px;background:var(--gold);color:var(--navy)}.gd-dday.on{background:var(--ok);color:#fff}.gd-dday.off{background:var(--line);color:var(--muted)}
+.gd-past{margin-top:16px}.gd-past summary{cursor:pointer;color:var(--muted);font-size:var(--fs-s);margin-bottom:10px}
+.gd-meta{margin-bottom:18px;overflow-wrap:anywhere}.gd-meta h2{font-size:var(--fs-xl)}
+.gd-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.gd-section{margin:0 0 14px}.gd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}
+.gd-evlist h2 a,.gd-product h2 a{color:var(--navy);text-decoration:none}.gd-product h2 a:hover{text-decoration:underline}
+.gd-product{padding:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);min-width:0;overflow-wrap:anywhere}
+.gd-product h3{margin:0 0 8px;font-size:var(--fs-base)}.gd-price{color:var(--accent);font-weight:700}.gd-detail{font-size:var(--fs-s);color:var(--muted)}
+.gd-qty{display:flex;align-items:center;gap:8px;margin-top:10px}.gd-type{flex:1;min-width:0}.gd-qty output{min-width:2ch;text-align:center}
+.gd-qty button{min-width:44px;min-height:44px}.gd-thumb{width:52px;height:52px;object-fit:contain;flex:none;border-radius:var(--r-sm);background:var(--paper)}.gd-hero{display:block;width:100%;max-height:150px;object-fit:contain;margin:8px 0;border-radius:var(--r-sm);background:var(--paper)}.gd-cart{position:sticky;top:calc(var(--top-h) + 12px);background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.gd-cart h2{margin:0 0 10px;font-size:var(--fs-l)}.gd-lines{max-height:38vh;overflow:auto;overflow-wrap:anywhere}.gd-line{padding:8px 0;border-bottom:1px solid var(--line);font-size:var(--fs-m)}
+.gd-total{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin:12px 0}.gd-total strong{font-size:var(--fs-xl);color:var(--accent)}
+.gd-actions{display:flex;gap:8px}.gd-actions button{min-height:44px}.gd-cart textarea{width:100%;min-height:100px;margin-top:8px;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line)}.gd-price,.gd-total,.gd-qty output{font-variant-numeric:tabular-nums}.gd-message{color:var(--warn);font-size:var(--fs-s);margin:8px 0;overflow-wrap:anywhere}.gd-perks{font-size:var(--fs-m)}
+.gd-bill-wrap{position:fixed;inset:0;z-index:50;background:rgba(20,28,51,.45);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:calc(var(--top-h) + 12px) 12px 24px}
+.gd-bill-wrap[hidden]{display:none}
+.gd-bill{background:var(--card);color:var(--ink);border-radius:var(--r);width:min(560px,100%);padding:16px 18px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.gd-bill h2{margin:0 0 2px;font-size:var(--fs-l)}.gd-bill .sub{color:var(--muted);font-size:var(--fs-xs);margin:0 0 10px}
+.gd-bill table{width:100%;border-collapse:collapse;font-size:var(--fs-s);font-variant-numeric:tabular-nums}
+.gd-bill th,.gd-bill td{padding:4px 5px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.gd-bill th{font-size:var(--fs-xs);color:var(--muted);font-weight:600}.gd-bill td.n,.gd-bill th.n{text-align:right;white-space:nowrap}
+.gd-bill tfoot td{border-bottom:0;font-weight:700}.gd-bill tfoot .sum td{font-size:var(--fs-base);border-top:2px solid var(--ink)}
+.gd-bill td.pic{width:42px;padding-right:2px}.gd-bill td.pic img{width:36px;height:36px;object-fit:contain;border-radius:var(--r-sm);background:var(--paper);display:block}.gd-bill .nm{font-weight:600}.gd-bill .op{color:var(--muted);font-size:var(--fs-xs);margin-top:1px}.gd-bill td{vertical-align:middle}
+@media print{.gd-bill td.pic img,.gd-bill td.pic .gd-thumb{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.gd-bill .pq{display:none;color:var(--muted);font-size:var(--fs-xs);margin-top:1px}
+@media(max-width:560px){.gd-bill{padding:12px 12px}.gd-bill .cp,.gd-bill .cq{display:none}.gd-bill .pq{display:block}.gd-bill td.pic{width:40px}.gd-bill td.pic img{width:34px;height:34px}}
+.gd-bill .sec td{background:var(--paper);font-weight:700;font-size:var(--fs-xs);padding:3px 5px}
+.gd-bill .meta{margin-top:10px;font-size:var(--fs-xs);color:var(--muted);line-height:1.5}
+.gd-bill-act{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+@media print{body.gd-printing > *:not(.wrap){display:none!important}body.gd-printing .wrap > *:not(#gd-billwrap){display:none!important}body.gd-printing .gd-bill-wrap{position:static;background:none;padding:0;display:block}body.gd-printing .gd-bill{box-shadow:none;width:100%;padding:0}body.gd-printing .gd-bill-act{display:none}}
+.gd-select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:8px;max-width:100%;border-radius:var(--r-sm)}
+@media(max-width:760px){.gd-layout{display:block}.gd-cart{position:fixed;bottom:0;left:0;right:0;top:auto;z-index:20;border-radius:var(--r) var(--r) 0 0;padding:12px var(--gutter) calc(12px + env(safe-area-inset-bottom));max-height:48dvh;overflow:auto}.gd-lines{max-height:16vh}.gd-cart h2{font-size:var(--fs-base);margin-bottom:4px}.gd-total{margin:6px 0}.gd-layout{padding-bottom:var(--gd-cart-h,140px)}.gd-cart:not(.open) .gd-lines,.gd-cart:not(.open) .gd-actions,.gd-cart:not(.open) .gd-perks p+p{display:none}.gd-cart:not(.open) .gd-perks{font-size:var(--fs-s)}.gd-fold{all:unset;cursor:pointer;display:flex;gap:6px;align-items:center;width:100%}.gd-cart.open .gd-fold span{transform:rotate(180deg)}.gd-cart:not(.open){padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}}
+.gd-fold{all:unset;font:inherit}@media(min-width:761px){.gd-fold span{display:none}}</style>
+</head>
+<body class="gd-page">
+<div class="top">
+  <div class="tbar">
+    <span class="mark">🛍</span>    <h1>굿즈 계산기</h1>
+                  
+            <button type="button" class="ui-hide" title="상단 띠 숨기기 — 위 가장자리의 ▾ 로 다시 보입니다" aria-label="상단 띠 숨기기">▴</button>
+  </div>
+  </div>
+<style>
+.ui-lg{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;
+  padding:16px;background:rgba(20,28,51,.55)}
+.ui-lg.on{display:flex}
+.ui-lg form{width:100%;max-width:340px;box-sizing:border-box;padding:22px 20px 16px;
+  background:var(--card,#fff);color:var(--ink,#16203a);border-radius:var(--r-lg,16px);
+  box-shadow:0 18px 50px rgba(0,0,0,.3);font-family:var(--sans,sans-serif)}
+.ui-lg h3{margin:0 0 4px;font-size:17px}
+.ui-lg p{margin:0 0 14px;font-size:12.5px;color:var(--muted,#8b93a3)}
+.ui-lg input{display:block;width:100%;box-sizing:border-box;margin:0 0 8px;padding:11px 12px;
+  border:1px solid var(--line,#e3e6ec);border-radius:var(--r-sm,8px);font:inherit;font-size:15px;
+  background:var(--card,#fff);color:var(--ink,#16203a)}
+.ui-lg .err{min-height:18px;margin:0 0 6px;font-size:12.5px;color:var(--danger,#c0392b)}
+.ui-lg button{width:100%;padding:11px;border:0;border-radius:var(--r-sm,8px);cursor:pointer;
+  background:var(--navy,#141c33);color:#fff;font:inherit;font-size:15px;font-weight:700}
+.ui-lg button:disabled{opacity:.5;cursor:default}
+.ui-lg .row{display:flex;justify-content:space-between;margin-top:12px;font-size:12.5px}
+.ui-lg .row a{color:var(--muted,#8b93a3);text-decoration:none}
+</style>
+<div class="ui-lg" id="uiLg" role="dialog" aria-modal="true" aria-label="로그인">
+  <form action="../login.php" method="post" autocomplete="on">
+    <h3>다모아 로그인</h3>
+    <p>로그인하면 이 화면 그대로 이어서 씁니다</p>
+    <input type="text" name="u" placeholder="아이디" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <input type="password" name="p" placeholder="비밀번호" autocomplete="current-password">
+    <div class="err"></div>
+    <button type="submit">로그인</button>
+    <div class="row">
+      
+      <a href="#" data-x="1">닫기</a>
+    </div>
+  </form>
+</div>
+<script>
+function uiLogin(){var m=document.getElementById('uiLg');if(!m)return true;
+  m.classList.add('on');setTimeout(function(){m.querySelector('[name=u]').focus()},30);return false}
+(function(){var m=document.getElementById('uiLg'),f=m.querySelector('form'),
+  er=m.querySelector('.err'),b=f.querySelector('button');
+  function shut(){m.classList.remove('on');er.textContent=''}
+  m.addEventListener('click',function(e){if(e.target===m||e.target.getAttribute('data-x')){e.preventDefault();shut()}});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&m.classList.contains('on')){e.stopPropagation();shut()}},true);
+  f.addEventListener('submit',function(e){e.preventDefault();er.textContent='';b.disabled=true;
+    fetch(f.action,{method:'POST',body:new URLSearchParams(new FormData(f)),credentials:'same-origin'})
+      .then(function(r){return r.json()})
+      .then(function(j){if(j&&j.ok){location.reload();return}
+        er.textContent=(j&&j.error)||'로그인하지 못했습니다';b.disabled=false;f.p.select()})
+      .catch(function(){er.textContent='서버에 닿지 못했습니다';b.disabled=false})});
+})();
+</script>
+<div class="wrap">
+<p><a href="./">← 행사 목록</a></p><section class="gd-meta"><h2>이세계아이돌 2nd Mini Album POP-UP STORE [Across Dimensions]</h2><p>2026-11-27 (금) ~ 2026-12-06 (일) · 스테이지 엑스 익선 (서울 종로구 삼일대로28길 28)</p><p><button type="button" class="btn" id="gd-share" data-url="https://is.gd/5HlcW6">🔗 단축 주소 복사</button> <small style="color:var(--muted)">링크로 공유 · 계산은 이 브라우저 안에서만</small></p><a href="https://x.com/isegyeidol_pu/status/2120441417495613899" target="_blank" rel="noopener noreferrer">원문 보기</a><details><summary>구매 안내</summary><ul><li>[구매 특전 안내] 포토카드 (5만원 당 랜덤 1종, 30만원 이상 6종 1세트 지급)</li><li>• 예) 5만원 이상 구매 : 랜덤1종 / 10만원 이상 구매 : 랜덤2종 / ••• /</li><li>• 30만원 이상 구매 : 6종1세트 / 35만원 이상 구매 : 6종1세트 + 랜덤1종</li><li>[구매 수량 제한 안내] • 예외 상품 외 모든 상품은 품목별, 옵션별 1인 2개까지 구매 가능 합니다. (ex. 보이스키링-옵션별(멤버별) 2개, 최대 12개까지 구매 가능 / 팔찌-2개까지 구매 가능)</li><li>[예외 상품 1] &lt;RE : WIND&gt; POCKET WATCH - 1인 최대 1개</li><li>[예외 상품 2] OFFICIAL PLUSH SEDOLIZ - 옵션별(멤버별) 1인 최대 1개</li><li>[예외 상품 3] RANDOM PHOTOCARD PACK - 1인 최대 5개</li><li>[MD 구매 안내 사항] • MD는 1인당 구매 수량이 제한될 수 있으며, 현장 상황에 따라 구매 제한 수량이 변경될 수 있습니다.</li><li>• 구매 제한 수량을 초과할 경우 결제가 거부되거나 취소될 수 있습니다.</li><li>• 판매되는 MD의 종류 및 수량은 현장 상황에 따라 변동될 수 있습니다.</li><li>• 모든 상품은 준비된 재고 소진 시 조기 품절될 수 있습니다.</li><li>• 모든 거래는 한국 원화(KRW, ₩)로 진행됩니다.</li><li>• 구매 금액 특전은 MD 판매 구역에서의 구매만 인정되며, 벤딩머신 이용 금액은 합산되지 않습니다.</li><li>• 구매 시 제공되는 특전은 랜덤으로, 교환 불가합니다.</li><li>• 결제 가능 수단: 현금, 신용카드, 체크카드 (실물 카드로만 결제 가능하며, 모바일 페이 및 앱카드 등 기타 결제 수단은 지원되지 않습니다.)</li><li>• 타인 명의 카드 사용은 제한될 수 있으며, 일부 카드는 카드사 사정에 의해 결제가 불가할 수 있습니다.</li><li>• 상품 결제 및 픽업에 소요되는 시간을 고려하시어, 예약하신 회차 종료 시간 전까지 결제 및 상품 수령을 완료해 주시기 바랍니다.</li><li>• 구매하신 MD의 팝업 내부 보관 장소는 제공되지 않습니다. 개인 소지품 관리에 유의하시기 바랍니다.</li><li>• 관련 법령에 따라 쇼핑백 및 봉투는 무상 제공되지 않으며, 필요 시 현장에서 유상 구매 가능합니다.</li><li>[교환/환불 규정] • 상품 제작 시 발생되는 미세한 올 트임, 올 나감, 실밥 등은 제조 공정상 발생할 수 있는 부분으로 불량 사유가 아닙니다.</li><li>• 소재 특성상 미세한 스크래치, 찍힘, 눌림 자국이 발생할 수 있으며, 미세한 스크래치 및 눌림 자국은 불량의 대상이 되지 않습니다. 구매 시 참고 부탁드립니다.</li><li>• 구매한 상품이 불량인 경우에 한하여 구매 당일, 구매처 운영 시간 내 교환 및 환불이 가능합니다.</li><li>• 교환 품목이 품절인 경우, 교환은 불가하며 환불만 가능합니다.</li><li>• 교환 및 환불을 위해서는 상품의 모든 구성품(박스 포함), 특전, 영수증 및 결제에 사용한 결제 수단을 반드시 지참하여 현장에 방문해 주시기 바랍니다.</li><li>• 아래에 해당하는 경우, 교환 및 환불이 불가합니다: 상품 라벨 손상 및 제거 또는 상품이 고객의 책임 사유로 훼손 또는 손상된 경우 / 오염, 착용, 체취, 향수, 세탁 등 제품을 사용한 흔적이 있는 경우</li><li>• 계산 착오로 인한 구매 오류는 구매 당일에 한해 영수증 확인 후 현장에서 처리 가능합니다.</li><li>• 팝업스토어 운영 종료 이후에는 교환 및 환불이 불가합니다. 구매 후 현장에서 상품을 확인해 주시기 바랍니다.</li></ul></details></section><noscript><p>수량과 합계를 계산하려면 자바스크립트를 켜 주세요.</p></noscript><div class="gd-bill-wrap" id="gd-billwrap" hidden><div class="gd-bill" role="dialog" aria-modal="true" aria-labelledby="gd-billtitle"><div id="gd-billbody"></div><div class="gd-bill-act"><button type="button" class="btn" id="gd-billclose">닫기</button><button type="button" class="btn primary" id="gd-billprint">인쇄 · PDF 저장</button></div></div></div><div class="gd-layout"><div id="gd-products"></div><aside class="gd-cart" id="gd-cart" aria-label="장바구니 요약"><h2><button type="button" class="gd-fold" id="gd-fold" aria-expanded="false">장바구니 <span aria-hidden="true">▴</span></button></h2><div id="gd-lines" class="gd-lines"></div><div class="gd-total"><span id="gd-count"></span><strong id="gd-total"></strong></div><div id="gd-perks" class="gd-perks"></div><div class="gd-actions"><button type="button" class="btn" id="gd-clear">비우기</button><button type="button" class="btn" id="gd-bill">내역서</button><button type="button" class="btn primary" id="gd-copy">목록 복사</button></div><p id="gd-message" class="gd-message" role="status" aria-live="polite"></p><textarea id="gd-copytext" aria-label="복사할 구매 목록" hidden readonly></textarea></aside></div></div>
+<script>
+const GD = {"id":"isegye-2026-across","event":"이세계아이돌 2nd Mini Album POP-UP STORE [Across Dimensions]","period":"2026-11-27 (금) ~ 2026-12-06 (일)","place":"스테이지 엑스 익선 (서울 종로구 삼일대로28길 28)","source":"https:\/\/x.com\/isegyeidol_pu\/status\/2120441417495613899","notes":["[구매 특전 안내] 포토카드 (5만원 당 랜덤 1종, 30만원 이상 6종 1세트 지급)","• 예) 5만원 이상 구매 : 랜덤1종 \/ 10만원 이상 구매 : 랜덤2종 \/ ••• \/","• 30만원 이상 구매 : 6종1세트 \/ 35만원 이상 구매 : 6종1세트 + 랜덤1종","[구매 수량 제한 안내] • 예외 상품 외 모든 상품은 품목별, 옵션별 1인 2개까지 구매 가능 합니다. (ex. 보이스키링-옵션별(멤버별) 2개, 최대 12개까지 구매 가능 \/ 팔찌-2개까지 구매 가능)","[예외 상품 1] \u003CRE : WIND\u003E POCKET WATCH - 1인 최대 1개","[예외 상품 2] OFFICIAL PLUSH SEDOLIZ - 옵션별(멤버별) 1인 최대 1개","[예외 상품 3] RANDOM PHOTOCARD PACK - 1인 최대 5개","[MD 구매 안내 사항] • MD는 1인당 구매 수량이 제한될 수 있으며, 현장 상황에 따라 구매 제한 수량이 변경될 수 있습니다.","• 구매 제한 수량을 초과할 경우 결제가 거부되거나 취소될 수 있습니다.","• 판매되는 MD의 종류 및 수량은 현장 상황에 따라 변동될 수 있습니다.","• 모든 상품은 준비된 재고 소진 시 조기 품절될 수 있습니다.","• 모든 거래는 한국 원화(KRW, ₩)로 진행됩니다.","• 구매 금액 특전은 MD 판매 구역에서의 구매만 인정되며, 벤딩머신 이용 금액은 합산되지 않습니다.","• 구매 시 제공되는 특전은 랜덤으로, 교환 불가합니다.","• 결제 가능 수단: 현금, 신용카드, 체크카드 (실물 카드로만 결제 가능하며, 모바일 페이 및 앱카드 등 기타 결제 수단은 지원되지 않습니다.)","• 타인 명의 카드 사용은 제한될 수 있으며, 일부 카드는 카드사 사정에 의해 결제가 불가할 수 있습니다.","• 상품 결제 및 픽업에 소요되는 시간을 고려하시어, 예약하신 회차 종료 시간 전까지 결제 및 상품 수령을 완료해 주시기 바랍니다.","• 구매하신 MD의 팝업 내부 보관 장소는 제공되지 않습니다. 개인 소지품 관리에 유의하시기 바랍니다.","• 관련 법령에 따라 쇼핑백 및 봉투는 무상 제공되지 않으며, 필요 시 현장에서 유상 구매 가능합니다.","[교환\/환불 규정] • 상품 제작 시 발생되는 미세한 올 트임, 올 나감, 실밥 등은 제조 공정상 발생할 수 있는 부분으로 불량 사유가 아닙니다.","• 소재 특성상 미세한 스크래치, 찍힘, 눌림 자국이 발생할 수 있으며, 미세한 스크래치 및 눌림 자국은 불량의 대상이 되지 않습니다. 구매 시 참고 부탁드립니다.","• 구매한 상품이 불량인 경우에 한하여 구매 당일, 구매처 운영 시간 내 교환 및 환불이 가능합니다.","• 교환 품목이 품절인 경우, 교환은 불가하며 환불만 가능합니다.","• 교환 및 환불을 위해서는 상품의 모든 구성품(박스 포함), 특전, 영수증 및 결제에 사용한 결제 수단을 반드시 지참하여 현장에 방문해 주시기 바랍니다.","• 아래에 해당하는 경우, 교환 및 환불이 불가합니다: 상품 라벨 손상 및 제거 또는 상품이 고객의 책임 사유로 훼손 또는 손상된 경우 \/ 오염, 착용, 체취, 향수, 세탁 등 제품을 사용한 흔적이 있는 경우","• 계산 착오로 인한 구매 오류는 구매 당일에 한해 영수증 확인 후 현장에서 처리 가능합니다.","• 팝업스토어 운영 종료 이후에는 교환 및 환불이 불가합니다. 구매 후 현장에서 상품을 확인해 주시기 바랍니다."],"perks":[{"min":50000,"text":"포토카드 랜덤 1종"},{"min":100000,"text":"포토카드 랜덤 2종"},{"min":150000,"text":"포토카드 랜덤 3종"},{"min":200000,"text":"포토카드 랜덤 4종"},{"min":250000,"text":"포토카드 랜덤 5종"},{"min":300000,"text":"포토카드 6종 1세트"},{"min":350000,"text":"포토카드 6종 1세트 + 랜덤 1종"},{"min":400000,"text":"포토카드 6종 1세트 + 랜덤 2종"},{"min":450000,"text":"포토카드 6종 1세트 + 랜덤 3종"},{"min":500000,"text":"포토카드 6종 1세트 + 랜덤 4종"}],"groups":[{"no":"01","section":"SEDOLIZ","name":"OFFICIAL PLUSH SEDOLIZ","price":20000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":1,"size":"8~13.5×10.5~14×5.5~6.5cm","material":"겉감, 충전재(솜): 폴리에스터 100% | 가방, 목걸이, 머리끈 고무줄: 폴리이소프렌","imgs":["goodsdata\/img\/isegye-2026-across\/00-00.jpg","goodsdata\/img\/isegye-2026-across\/00-01.jpg","goodsdata\/img\/isegye-2026-across\/00-02.jpg","goodsdata\/img\/isegye-2026-across\/00-03.jpg","goodsdata\/img\/isegye-2026-across\/00-04.jpg","goodsdata\/img\/isegye-2026-across\/00-05.jpg"]},{"no":"02","section":"SEDOLIZ","name":"SEDOLIZ PLUSH OUTFIT","price":10000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":2,"size":"8×4cm","material":"겉감, 안감: 폴리에스터 100% | 소매, 카라: PU 벨크로: 폴리아미드","imgs":["goodsdata\/img\/isegye-2026-across\/01-00.jpg","goodsdata\/img\/isegye-2026-across\/01-01.jpg","goodsdata\/img\/isegye-2026-across\/01-02.jpg","goodsdata\/img\/isegye-2026-across\/01-03.jpg","goodsdata\/img\/isegye-2026-across\/01-04.jpg","goodsdata\/img\/isegye-2026-across\/01-05.jpg"]},{"no":"03","section":"SEDOLIZ","name":"SEDOLIZ LIGHT STICK PLUSH BAND","price":18000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":2,"size":"6.5~9.5×9~12×7.5cm","material":"겉감, 충전재(솜): 폴리에스터 100% | 내부 고무밴드, 목걸이: 폴리이소프렌 | 단추: POM","imgs":["goodsdata\/img\/isegye-2026-across\/02-00.jpg","goodsdata\/img\/isegye-2026-across\/02-01.jpg","goodsdata\/img\/isegye-2026-across\/02-02.jpg","goodsdata\/img\/isegye-2026-across\/02-03.jpg","goodsdata\/img\/isegye-2026-across\/02-04.jpg","goodsdata\/img\/isegye-2026-across\/02-05.jpg"]},{"no":"04","section":"SEDOLIZ","name":"SEDOLIZ GOOD LUCK PLUSH KEYRING","price":18000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":2,"size":"약 10×7×3.5cm","material":"고리: 철+아연합금 | 귀 안쪽: 철 | 원단, 리본, 왕관, 머리끈: 폴리에스터 100% | 끈: 면 100%","imgs":["goodsdata\/img\/isegye-2026-across\/03-00.jpg","goodsdata\/img\/isegye-2026-across\/03-01.jpg","goodsdata\/img\/isegye-2026-across\/03-02.jpg","goodsdata\/img\/isegye-2026-across\/03-03.jpg","goodsdata\/img\/isegye-2026-across\/03-04.jpg","goodsdata\/img\/isegye-2026-across\/03-05.jpg"]},{"no":"05","section":"SEDOLIZ","name":"SEDOLIZ LUCKY CHARM","price":10000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":2,"size":"4×6cm","material":"폴리에스터, 금속제","imgs":["goodsdata\/img\/isegye-2026-across\/04-00.jpg","goodsdata\/img\/isegye-2026-across\/04-01.jpg","goodsdata\/img\/isegye-2026-across\/04-02.jpg","goodsdata\/img\/isegye-2026-across\/04-03.jpg","goodsdata\/img\/isegye-2026-across\/04-04.jpg","goodsdata\/img\/isegye-2026-across\/04-05.jpg"]},{"no":"06","section":"SEDOLIZ","name":"SEDOLIZ MINI DIGITAL CAMERA","price":42000,"types":["NENE (아이네)","HAPPY (징버거)","LILACHU (릴파)","LULU (주르르)","KING-A NYANG (고세구)","CHANY (비챤)"],"random":false,"limit_each":2,"size":"미니 카메라 6.3×2.4×2.7cm | 포토카드 5.5×8.5cm (1종)","material":"ABS, 금속","contents":"PHOTOCARD 1EA (미니 카메라 + 포토카드 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/05-00.jpg","goodsdata\/img\/isegye-2026-across\/05-01.jpg","goodsdata\/img\/isegye-2026-across\/05-02.jpg","goodsdata\/img\/isegye-2026-across\/05-03.jpg","goodsdata\/img\/isegye-2026-across\/05-04.jpg","goodsdata\/img\/isegye-2026-across\/05-05.jpg"]},{"no":"01","section":"MERCH LIST","name":"\u003CRE:WIND\u003E POCKET WATCH","price":68000,"types":null,"random":false,"limit":1,"size":"시계(체인 제외) 4.7×5.9cm | 포토카드 5.5×8.5cm (1종)","material":"금속제","contents":"PHOTOCARD 1EA (회중시계 + 포토카드 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/06-00.jpg"]},{"no":"02","section":"MERCH LIST","name":"OFFICIAL MINI LIGHT STICK KEYRING","price":24000,"types":null,"random":false,"limit_each":2,"size":"키링 45.3×43.5×98.6mm | 포토카드 5.5×8.5cm (6종 중 랜덤 1종)","material":"ABS, PC","contents":"PHOTOCARD RANDOM 1 OUT OF 6 (미니 응원봉 키링 + 포토카드 6종 중 랜덤 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/07-00.jpg"]},{"no":"03","section":"MERCH LIST","name":"RANDOM PHOTOCARD PACK","price":5000,"types":null,"random":true,"limit":5,"size":"5.5×8.5cm (18종 중 랜덤 2종)","material":"종이","contents":"RANDOM 2 OUT OF 18 (18종 중 랜덤 2종)","imgs":["goodsdata\/img\/isegye-2026-across\/08-00.jpg"]},{"no":"04","section":"MERCH LIST","name":"PAPER BOOKMARK SET","price":24000,"types":null,"random":false,"limit_each":2,"size":"6.8×18.2cm","material":"종이","contents":"1SET OF 6EA (INE, JINGBURGER, LILPA, JURURU, GOSEGU, VIICHAN 6종 1세트)","imgs":["goodsdata\/img\/isegye-2026-across\/09-00.jpg"]},{"no":"05","section":"MERCH LIST","name":"MINI X-BANNER POSTER (STAR \/ RACE \/ Love Cell ver.)","price":9000,"types":["STAR ver.","RACE ver.","Love Cell ver."],"random":false,"limit_each":2,"size":"15×30cm","material":"배너: PVC | 거치대: PC","imgs":["goodsdata\/img\/isegye-2026-across\/10-00.jpg","goodsdata\/img\/isegye-2026-across\/10-01.jpg","goodsdata\/img\/isegye-2026-across\/10-02.jpg"]},{"no":"06","section":"MERCH LIST","name":"ACRYLIC STAND (STAR \/ RACE ver.)","price":18000,"types":["아이네 · STAR ver.","징버거 · STAR ver.","릴파 · STAR ver.","주르르 · STAR ver.","고세구 · STAR ver.","비챤 · STAR ver.","아이네 · RACE ver.","징버거 · RACE ver.","릴파 · RACE ver.","주르르 · RACE ver.","고세구 · RACE ver.","비챤 · RACE ver."],"random":false,"limit_each":2,"size":"14×19cm","material":"아크릴","imgs":["goodsdata\/img\/isegye-2026-across\/11-00.jpg","goodsdata\/img\/isegye-2026-across\/11-01.jpg","goodsdata\/img\/isegye-2026-across\/11-02.jpg","goodsdata\/img\/isegye-2026-across\/11-03.jpg","goodsdata\/img\/isegye-2026-across\/11-04.jpg","goodsdata\/img\/isegye-2026-across\/11-05.jpg","goodsdata\/img\/isegye-2026-across\/11-06.jpg","goodsdata\/img\/isegye-2026-across\/11-07.jpg","goodsdata\/img\/isegye-2026-across\/11-08.jpg","goodsdata\/img\/isegye-2026-across\/11-09.jpg","goodsdata\/img\/isegye-2026-across\/11-10.jpg","goodsdata\/img\/isegye-2026-across\/11-11.jpg"]},{"no":"07","section":"MERCH LIST","name":"DESK MAT","price":24000,"types":null,"random":false,"limit_each":2,"size":"78.5×39.5cm","material":"폴리에스터, 고무","imgs":["goodsdata\/img\/isegye-2026-across\/12-00.jpg"]},{"no":"08","section":"MERCH LIST","name":"MINIATURE STRAP","price":16000,"types":["아이네","징버거","릴파","주르르","고세구","비챤"],"random":false,"limit_each":2,"size":"미니어처 2.7×6.3×1cm | 스트랩 단면 8.3×1.7cm","material":"아크릴, 종이, 메탈, PVC","imgs":["goodsdata\/img\/isegye-2026-across\/13-00.jpg","goodsdata\/img\/isegye-2026-across\/13-01.jpg","goodsdata\/img\/isegye-2026-across\/13-02.jpg","goodsdata\/img\/isegye-2026-across\/13-03.jpg","goodsdata\/img\/isegye-2026-across\/13-04.jpg","goodsdata\/img\/isegye-2026-across\/13-05.jpg"]},{"no":"09","section":"MERCH LIST","name":"VOICE KEYRING","price":22000,"types":["아이네","징버거","릴파","주르르","고세구","비챤"],"random":false,"limit_each":2,"size":"4.6~6.2×5.6~6.7cm","material":"실리콘, 메탈, 전자부품","imgs":["goodsdata\/img\/isegye-2026-across\/14-00.jpg","goodsdata\/img\/isegye-2026-across\/14-01.jpg","goodsdata\/img\/isegye-2026-across\/14-02.jpg","goodsdata\/img\/isegye-2026-across\/14-03.jpg","goodsdata\/img\/isegye-2026-across\/14-04.jpg","goodsdata\/img\/isegye-2026-across\/14-05.jpg"]},{"no":"10","section":"MERCH LIST","name":"MESH TRUCKER","price":40000,"types":null,"random":false,"limit_each":2,"size":"FREE","material":"몸판: 폴리에스터 100% (앞판 이면 PU 100%) | 챙: 면 100%","imgs":["goodsdata\/img\/isegye-2026-across\/15-00.jpg"]},{"no":"11","section":"MERCH LIST","name":"VARSITY JACKET","price":178000,"types":null,"random":false,"limit_each":2,"size":"어깨 65cm 가슴단면 65cm 소매기장 56.8cm 총 기장 70cm | 포토카드 5.5×8.5cm (6종 1세트)","material":"몸판: (겉)울40%, 폴리에스테르 60% (안)폴리에스테르 100% | 소매: 폴리우레탄 50%, 폴리에스테르 50%","contents":"PHOTOCARD 6EA 1SET (포토카드 5.5×8.5cm 6종 1세트)","imgs":["goodsdata\/img\/isegye-2026-across\/16-00.jpg"]},{"no":"12","section":"MERCH LIST","name":"CUSTOM PATCH SET","price":12000,"types":["아이네","징버거","릴파","주르르","고세구","비챤"],"random":false,"limit_each":2,"size":"7.8~12×5.2cm | 7.3~11.7×4.5~7.3cm","material":"폴리에스테르 100%","contents":"1SET OF 2PCS (멤버별 슬로건 패치 1개 + 번호 패치 1개: INE 99 \/ JINGBURGER 77 \/ LILPA 07 \/ JURURU 06 \/ GOSEGU 300 \/ VIICHAN 42)","imgs":["goodsdata\/img\/isegye-2026-across\/17-00.jpg","goodsdata\/img\/isegye-2026-across\/17-01.jpg","goodsdata\/img\/isegye-2026-across\/17-02.jpg","goodsdata\/img\/isegye-2026-across\/17-03.jpg","goodsdata\/img\/isegye-2026-across\/17-04.jpg","goodsdata\/img\/isegye-2026-across\/17-05.jpg"]},{"no":"13","section":"MERCH LIST","name":"WIND BREAKER","price":99000,"types":null,"random":false,"limit_each":2,"size":"어깨 54cm 가슴단면 65cm 소매기장 63.5cm 총 기장 71cm | 포토카드 5.5×8.5cm (6종 1세트)","material":"나일론 100%","contents":"PHOTOCARD 6EA 1SET (포토카드 5.5×8.5cm 6종 1세트)","imgs":["goodsdata\/img\/isegye-2026-across\/18-00.jpg"]},{"no":"14","section":"MERCH LIST","name":"T-SHIRT (1 \/ 2 size)","price":45000,"types":["아이네 · 1 size","징버거 · 1 size","릴파 · 1 size","주르르 · 1 size","고세구 · 1 size","비챤 · 1 size","아이네 · 2 size","징버거 · 2 size","릴파 · 2 size","주르르 · 2 size","고세구 · 2 size","비챤 · 2 size"],"random":false,"limit_each":2,"size":"1 size: 어깨 52.5cm 가슴단면 57cm 소매기장 20cm 총 기장 72.5cm | 2 size: 어깨 59cm 가슴단면 64cm 소매기장 23cm 총 기장 79cm | 포토카드 5.5×8.5cm (확정 1종)","material":"면 100%","contents":"PHOTOCARD 1EA (포토카드 5.5×8.5cm 확정 1종)","img":"goodsdata\/img\/isegye-2026-across\/19-00.jpg"},{"no":"15","section":"MERCH LIST","name":"BRACELET","price":26000,"types":null,"random":false,"limit_each":2,"size":"길이 16(+6)cm | 참 1.7×1.2cm","material":"써지컬","imgs":["goodsdata\/img\/isegye-2026-across\/20-00.jpg"]},{"no":"16","section":"MERCH LIST","name":"METAL BADGE SET","price":15000,"types":null,"random":false,"limit_each":2,"size":"1.8×3, 3.1×2.3cm","material":"메탈","contents":"1SET OF 2EA (메탈 뱃지 2종 1세트)","imgs":["goodsdata\/img\/isegye-2026-across\/21-00.jpg"]},{"no":"17","section":"MERCH LIST","name":"TECH POUCH SET","price":28000,"types":null,"random":false,"limit_each":2,"size":"파우치 약 10×17×6cm | 리무버블 스티커 8.5×13cm","material":"PC 외, 종이","contents":"파우치 + 리무버블 스티커 세트","imgs":["goodsdata\/img\/isegye-2026-across\/22-00.jpg"]},{"no":"18","section":"MERCH LIST","name":"REUSABLE BAG","price":6000,"types":null,"random":false,"limit_each":2,"size":"50×40×15cm","material":"rPET","imgs":["goodsdata\/img\/isegye-2026-across\/23-00.jpg"]},{"no":"19","section":"MERCH LIST","name":"STICKER PACK","price":10000,"types":["아이네","징버거","릴파","주르르","고세구","비챤"],"random":false,"limit_each":2,"size":"각 9.5×15cm","material":"3D 스티커: PVC, 에폭시 | 리무버블 스티커: 종이","contents":"1SET OF 2EA (3D 스티커 1매 + 리무버블 스티커 1매)","imgs":["goodsdata\/img\/isegye-2026-across\/24-00.jpg","goodsdata\/img\/isegye-2026-across\/24-01.jpg","goodsdata\/img\/isegye-2026-across\/24-02.jpg","goodsdata\/img\/isegye-2026-across\/24-03.jpg","goodsdata\/img\/isegye-2026-across\/24-04.jpg","goodsdata\/img\/isegye-2026-across\/24-05.jpg"]},{"no":"01","section":"BLIND ITEM","name":"RANDOM CAN BADGE","price":4000,"types":null,"random":true,"limit_each":2,"size":"5.7cm | 6종 중 랜덤 1종","material":"금속제","contents":"RANDOM 1EA (6종 중 랜덤 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/25-00.jpg"]},{"no":"02","section":"BLIND ITEM","name":"RANDOM SEDOLIZ LUCKY DREAM FIGURE","price":12000,"types":null,"random":true,"limit_each":2,"size":"약 5×2~4cm | 6종 중 랜덤 1종","material":"PVC","contents":"RANDOM 1EA (6종 중 랜덤 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/26-00.jpg"]},{"no":"03","section":"BLIND ITEM","name":"RANDOM SD ACRYLIC BLOCK","price":7000,"types":null,"random":true,"limit_each":2,"size":"약 6×7cm | 6종 중 랜덤 1종","material":"아크릴","contents":"RANDOM 1EA (6종 중 랜덤 1종)","imgs":["goodsdata\/img\/isegye-2026-across\/27-00.jpg"]}],"short":"isegye"};
+const GUSER="", GCSRF="", GSERVER=null, GOK=true;(() => {
+'use strict';
+const el = id => document.getElementById('gd-' + id);
+{ const b = el('share'); if (b) b.onclick = () => { const u = b.dataset.url; const ok = () => { b.textContent = '✓ 복사됨'; setTimeout(() => { b.textContent = '🔗 단축 주소 복사'; }, 1500); }; if (navigator.clipboard) navigator.clipboard.writeText(u).then(ok, () => prompt('복사하세요', u)); else prompt('복사하세요', u); }; }
+/* 휴대폰: 아래 장바구니는 합계 한 줄로 접어 두고, 머리를 누르면 목록이 펼쳐진다 */
+el('fold').onclick = () => { const o = el('cart').classList.toggle('open'); el('fold').setAttribute('aria-expanded', String(o)); };
+function cropPic(box, cls) {
+    const n = document.createElement('span'); n.className = cls; n.setAttribute('role', 'img'); n.setAttribute('aria-label', '상품 그림');
+    const url = 'goods_manage.php?action=image&id=' + encodeURIComponent(GD.id) + '&n=' + box.image;
+    Object.assign(n.style, {display:'inline-block', backgroundImage:'url("' + url + '")', backgroundRepeat:'no-repeat', backgroundSize:(100 / box.w) + '% ' + (100 / box.h) + '%', backgroundPosition:(box.w < 1 ? 100 * box.x / (1-box.w) : 0) + '% ' + (box.h < 1 ? 100 * box.y / (1-box.h) : 0) + '%'});
+    return n;
+}
+const money = n => n.toLocaleString('ko-KR') + '원';
+const key = 'goods.' + GD.id;
+let saved = {}, storageOK = true, cart = [], copyText = '', rows = [], lastTotal = 0, lastCount = 0;
+try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { storageOK = false; }
+if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
+if (GUSER && GSERVER !== null) { saved = GSERVER; storageOK = true; }
+const quantities = [], controls = [];
+let saveTimer, saveChain = Promise.resolve(), saveVersion = 0;
+function serverSave(store, importing = false) {
+    const version = ++saveVersion;
+    clearTimeout(saveTimer); message('저장 중…');
+    saveTimer = setTimeout(() => {
+        saveChain = saveChain.catch(() => {}).then(async () => {
+            try {
+                const body = new URLSearchParams({csrf:GCSRF, cart:JSON.stringify(store), import:importing?'1':'0'});
+                const r = await fetch(location.pathname + location.search + '&api=save', {method:'POST',body});
+                const j = await r.json(); if (!r.ok) throw Error(j.error || '저장 실패');
+                if (importing) { try { localStorage.removeItem(key); } catch(e) {} }
+                if (importing && version === saveVersion) { GD.groups.forEach((g,i)=>{let left=g.limit??9999; controls[i].forEach((c,k)=>{const q=j.cart[identity(g,c.t)];quantities[i][k]=Number.isSafeInteger(q)&&q>0?Math.min(q,left,g.limit_each??9999):0;left-=quantities[i][k];});}); update(false); }
+                if(version===saveVersion) message('저장됨');
+            } catch(e) { if(version===saveVersion) message('저장 안 됨 · '+e.message); }
+        });
+    }, 800);
+}
+function perkState(total) {
+    const candidates=[];
+    for(const p of GD.perks || []) {
+        if(p.every) { const n=Math.floor(total/p.every); if(n) candidates.push({min:n*p.every,text:p.text.replaceAll('{n}',String(n))}); candidates.push({min:(n+1)*p.every,text:p.text.replaceAll('{n}',String(n+1))}); }
+        else if(p.then_every) { const n=Math.max(0,Math.floor((total-p.min)/p.then_every)); const text=k=>p.text+(k?' '+p.then_text.replaceAll('{n}',String(k)):''); candidates.push({min:p.min+n*p.then_every,text:text(n)}); if(total>=p.min)candidates.push({min:p.min+(n+1)*p.then_every,text:text(n+1)}); }
+        else candidates.push(p);
+    }
+    candidates.sort((a,b)=>a.min-b.min);
+    const upcoming=candidates.filter(p=>p.min>total),threshold=upcoming[0]?.min;
+    return {got:candidates.filter(p=>p.min<=total).pop(),next:upcoming.filter(p=>p.min===threshold).pop()};
+}
+const message = text => { el('message').textContent = text; };
+function node(tag, text, cls) {
+    const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n;
+}
+/* 상품 번호·이름·종류가 바뀌면 옛 선택을 새 상품으로 잘못 돌리지 않는다. */
+const identity = (g, t) => JSON.stringify([g.no || '', g.section || '', g.name, !!g.random, t]);
+const sections = new Map();
+GD.groups.forEach((g, i) => {
+    const section = g.section || '상품';
+    if (!sections.has(section)) {
+        const s = node('section', undefined, 'gd-section'); s.append(node('h2', section));
+        const grid = node('div', undefined, 'gd-grid'); s.append(grid); el('products').append(s); sections.set(section, grid);
+    }
+    const card = node('article', undefined, 'gd-product');
+    card.append(node('h3', (g.no ? g.no + ' · ' : '') + g.name), node('div', money(g.price), 'gd-price'));
+    const pic = (src, cls) => { const im = node('img', undefined, cls); im.src = src; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; return im; };
+    if (g.box) card.append(cropPic(g.box, 'gd-thumb'));
+    if (g.img) card.append(pic(g.img, 'gd-hero'));
+    if (g.limit !== null && g.limit !== undefined) card.append(node('p', '1인 총 ' + g.limit + '개까지', 'gd-detail'));
+    else if (g.limit_each) card.append(node('p', (g.types && g.types.length > 1 ? '옵션별 ' : '') + '1인 ' + g.limit_each + '개까지', 'gd-detail'));
+    const detail = [g.size, g.material, g.contents].filter(Boolean).join(' · ');
+    if (detail) { const d = node('details'); d.append(node('summary', '상품 정보'), node('p', detail, 'gd-detail')); card.append(d); }
+    const types = g.random ? ['랜덤(종류 못 고름)'] : (g.types && g.types.length ? g.types : ['단품']);
+    let remaining = g.limit ?? 9999;
+    quantities[i] = types.map(t => {
+        const q = saved[identity(g, t)];
+        const clean = Number.isSafeInteger(q) && q > 0 ? Math.min(q, remaining, g.limit_each ?? 9999, 9999) : 0;
+        remaining -= clean; return clean;
+    });
+    controls[i] = [];
+    types.forEach((t, j) => {
+        const row = node('div', undefined, 'gd-qty'), minus = node('button', '−', 'btn'), plus = node('button', '+', 'btn'), out = node('output');
+        minus.type = plus.type = 'button';
+        minus.setAttribute('aria-label', g.name + ' ' + t + ' 수량 줄이기');
+        plus.setAttribute('aria-label', g.name + ' ' + t + ' 수량 늘리기');
+        out.setAttribute('aria-label', g.name + ' ' + t + ' 수량');
+        minus.onclick = () => change(i, j, -1); plus.onclick = () => change(i, j, 1);
+        if (g.boxes && g.boxes[j] && !g.random) row.append(cropPic(g.boxes[j], 'gd-thumb'));
+        else if (g.imgs && g.imgs[j] && !g.random) row.append(pic(g.imgs[j], 'gd-thumb'));
+        else if (g.imgs && g.imgs.length === 1 && g.random) row.append(pic(g.imgs[0], 'gd-thumb'));
+        row.append(node('span', t, 'gd-type'), minus, out, plus); card.append(row);
+        controls[i][j] = {minus, plus, out, t};
+    });
+    sections.get(section).append(card);
+});
+function change(i, j, delta) {
+    const total = quantities[i].reduce((a, b) => a + b, 0), max = GD.groups[i].limit ?? 9999;
+    if (delta > 0 && total >= max) { message('이 상품은 총 ' + max + '개까지 담을 수 있습니다.'); return; }
+    const each = GD.groups[i].limit_each ?? 9999;
+    if (delta > 0 && quantities[i][j] >= each) { message('이 상품은 ' + (controls[i].length > 1 ? '옵션별 ' : '') + each + '개까지 담을 수 있습니다.'); return; }
+    quantities[i][j] = Math.max(0, quantities[i][j] + delta); update(true);
+}
+function update(persist) {
+    cart = []; rows = []; let count = 0, total = 0; const store = Object.create(null);
+    GD.groups.forEach((g, i) => {
+        const sum = quantities[i].reduce((a, b) => a + b, 0), max = g.limit ?? 9999;
+        controls[i].forEach((c, j) => {
+            const q = quantities[i][j]; c.out.textContent = q; c.minus.disabled = q === 0;
+            /* 제한에 닿아도 +를 누르면 이유를 읽을 수 있도록 둔다. */
+            c.plus.setAttribute('aria-disabled', String(sum >= max || q >= (g.limit_each ?? 9999)));
+            if (!q) return;
+            store[identity(g, c.t)] = q; count += q; total += q * g.price;
+            cart.push(g.name + ' · ' + c.t + ' ×' + q + ' = ' + money(q * g.price));
+            rows.push({sec: g.section || '', no: g.no || '', name: g.name, type: c.t, price: g.price, q, box: (!g.random && g.boxes && g.boxes[j]) || g.box || null, img: (g.imgs && (g.imgs[j] || (g.imgs.length === 1 ? g.imgs[0] : ''))) || g.img || ''});
+        });
+    });
+    el('lines').replaceChildren(...(cart.length ? cart.map(s => node('div', s, 'gd-line')) : [node('p', '담은 상품이 없습니다.')]));
+    el('count').textContent = '총 ' + count.toLocaleString('ko-KR') + '개'; el('total').textContent = money(total);
+    /* 특전 단계가 많으면(5만원마다 등) 받는 것 하나와 다음 단계 하나만 보인다 */
+    const {got,next} = perkState(total);
+    el('perks').replaceChildren(...[got ? node('p', '🎁 ' + got.text + ' · 받음') : null, next ? node('p', '다음: ' + next.text + ' · ' + money(next.min - total) + ' 더') : null].filter(Boolean));
+    copyText = [GD.event, ...cart, '총 ' + count + '개 · 합계 ' + money(total)].join('\n');
+    lastTotal = total; lastCount = count; el('bill').disabled = cart.length === 0;
+    el('copy').disabled = el('clear').disabled = cart.length === 0;
+    if (persist) {
+        if (!GUSER) { try { localStorage.setItem(key, JSON.stringify(store)); storageOK = true; } catch (e) { storageOK = false; } }
+        el('copytext').hidden = true;
+        if (GUSER) serverSave(store);
+    }
+    if (!persist || !GUSER) message(storageOK ? '' : '브라우저에 선택을 저장할 수 없습니다. 화면을 닫으면 선택이 사라질 수 있습니다.');
+}
+el('clear').onclick = () => {
+    if (!window.confirm('담은 상품을 모두 비울까요?')) return;
+    quantities.forEach(q => q.fill(0)); update(true);
+};
+/* 내역서 — 고른 것을 영수증처럼(섹션·번호·상품·옵션·단가·수량·금액, 합계·특전). 인쇄하면 내역서만 찍힌다(PDF 저장도 여기서) */
+function showBill() {
+    const box = el('billbody'); box.replaceChildren();
+    const h = node('h2', '구매 예정 내역서'); h.id = 'gd-billtitle';
+    const now = new Date(), stamp = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    box.append(h, node('p', GD.event + (GD.period ? ' · ' + GD.period : '') + (GD.place ? ' · ' + GD.place : ''), 'sub'));
+    const t = node('table'), th = node('thead'), tb = node('tbody'), tf = node('tfoot'), tr = (cells, cls) => { const r = node('tr', undefined, cls); cells.forEach(([v, c, tag]) => r.append(node(tag || 'td', v, c))); return r; };
+    th.append(tr([['', '', 'th'], ['상품', '', 'th'], ['가격', 'n cp', 'th'], ['수량', 'n cq', 'th'], ['금액', 'n', 'th']]));
+    let sec = null;
+    rows.forEach(r => {
+        if (r.sec !== sec) { sec = r.sec; const s = node('tr', undefined, 'sec'), c = node('td', sec || '상품'); c.colSpan = 5; s.append(c); tb.append(s); }
+        const row = node('tr'), pc = node('td', undefined, 'pic'), nm = node('td');
+        if (r.box) { const im = cropPic(r.box, 'gd-thumb'); im.style.width = im.style.height = '36px'; pc.append(im); }
+        else if (r.img) { const im = node('img'); im.src = r.img; im.alt = ''; pc.append(im); }
+        nm.append(node('div', (r.no ? r.no + ' · ' : '') + r.name, 'nm'));
+        if (r.type && r.type !== '단품') nm.append(node('div', r.type, 'op'));
+        nm.append(node('div', money(r.price) + ' × ' + r.q, 'pq'));
+        row.append(pc, nm, node('td', money(r.price), 'n cp'), node('td', String(r.q), 'n cq'), node('td', money(r.price * r.q), 'n'));
+        tb.append(row);
+    });
+    const {got,next} = perkState(lastTotal);
+    const sum = tr([[''], ['합계 · ' + lastCount + '개'], ['', 'cp'], ['', 'cq'], [money(lastTotal), 'n']], 'sum');
+    tf.append(sum);
+    if (got || next) { const r = node('tr'), c = node('td', (got ? '🎁 구매 특전: ' + got.text : '구매 특전 없음') + (next ? ' (다음 단계 ' + next.text + '까지 ' + money(next.min - lastTotal) + ')' : '')); c.colSpan = 5; c.style.fontWeight = '400'; r.append(c); tf.append(r); }
+    t.append(th, tb, tf);
+    const meta = node('div', undefined, 'meta');
+    meta.append(node('div', '작성 ' + stamp + ' · 다모아 굿즈 계산기(예상 금액이며 실제 결제는 현장 기준)'));
+    (GD.notes || []).filter(n => /결제 가능 수단|구매 수량 제한 안내/.test(n)).forEach(n => meta.append(node('div', n)));
+    box.append(t, meta);
+    el('billwrap').hidden = false; el('billclose').focus();
+}
+el('bill').onclick = showBill;
+el('billclose').onclick = () => { el('billwrap').hidden = true; el('bill').focus(); };
+el('billwrap').onclick = e => { if (e.target === el('billwrap')) el('billclose').click(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el('billwrap').hidden) el('billclose').click(); });
+el('billprint').onclick = () => { document.body.classList.add('gd-printing'); window.print(); };
+window.addEventListener('afterprint', () => document.body.classList.remove('gd-printing'));
+el('copy').onclick = async () => {
+    const text = copyText;
+    try { await navigator.clipboard.writeText(text); message('구매 목록을 복사했습니다.'); }
+    catch (e) {
+        const area = el('copytext'); area.hidden = false; area.value = text; area.focus(); area.select();
+        message('자동 복사를 사용할 수 없습니다. 아래 목록을 길게 눌러 복사해 주세요.');
+    }
+};
+update(false);
+if (GUSER && !GOK) message('저장 안 됨 · 서버 자료를 읽지 못했습니다');
+if (GUSER && GOK && GSERVER === null) serverSave(saved, true);
+const cartBox = document.querySelector('.gd-cart');
+const measure = () => document.documentElement.style.setProperty('--gd-cart-h', (cartBox.getBoundingClientRect().height + 20) + 'px');
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(cartBox);
+window.addEventListener('resize', measure); measure();
+})();
+</script>
+<script>(function(){var t=document.querySelector('.top');if(!t)return;var R=document.documentElement,K='ui.bar';function h(){R.style.setProperty('--top-h',R.classList.contains('ui-bar-off')?'0px':t.offsetHeight+'px');}function set(v){R.classList.toggle('ui-bar-off',v);try{v?localStorage.setItem(K,'off'):localStorage.removeItem(K);}catch(e){}h();}var off=false;try{off=localStorage.getItem(K)==='off';}catch(e){}R.classList.toggle('ui-bar-off',off);h();var b=t.querySelector('.ui-hide');if(b)b.onclick=function(){set(true);};var s=document.createElement('button');s.type='button';s.className='ui-show';s.textContent='▾ 상단 띠';s.title='상단 띠 다시 보이기';s.onclick=function(){set(false);};document.body.appendChild(s);window.addEventListener('resize',h);})();</script>
+<script>(function(){var m=navigator.userAgent.match(/DamoaApp\/([0-9]+)\.([0-9]+)/);if(!m||!(+m[1]>1||(+m[1]===1&&+m[2]>=11)))return;var a=window.DamoaApp;if(!a||typeof a.split!=='function'||typeof a.unsplit!=='function'||typeof a.isSplit!=='function')return;var bar=document.querySelector('.tbar');if(!bar)return;var b=document.createElement('button');b.type='button';b.className='ui-split';b.textContent='⧉';function lab(){try{var on=a.isSplit();b.title=on?'한 화면으로':'화면 나누기';b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',on?'true':'false');}catch(e){}}b.onclick=function(){try{a.isSplit()?a.unsplit():a.split('');}catch(e){}};bar.insertBefore(b,bar.querySelector('.ui-home')||bar.querySelector('.ui-hide'));lab();window.addEventListener('damoasplit',lab);window.addEventListener('focus',lab);})();</script>
+<script>(function(){var R=document.documentElement,K='ui.help';try{R.classList.toggle('ui-help-on',localStorage.getItem(K)==='on');}catch(e){}function add(){if(document.querySelector('.tbar .ui-help')||!document.querySelector('.help'))return;var bar=document.querySelector('.tbar');if(!bar)return;var b=document.createElement('button');b.type='button';b.className='ui-help';b.title='이 화면의 긴 설명을 펴고 접습니다';function lab(){b.textContent=R.classList.contains('ui-help-on')?'ⓘ 설명 접기':'ⓘ 설명';}lab();b.onclick=function(){var on=!R.classList.contains('ui-help-on');R.classList.toggle('ui-help-on',on);try{on?localStorage.setItem(K,'on'):localStorage.removeItem(K);}catch(e){}lab();};var hm=bar.querySelector('.ui-home')||bar.querySelector('.ui-hide');bar.insertBefore(b,hm);}add();setTimeout(add,1500);})();</script>
+<script>document.addEventListener('focusin',function(e){var t=e.target;if(!t||t.tagName!=='INPUT'||t.type!=='date')return;if(!t.min)t.min='1900-01-01';if(!t.max)t.max='2099-12-31';},true);</script>
+<p style="text-align:center;color:#8a90a2;font-size:12px;margin:24px 0">굿즈 계산기 · 담은 수량은 이 브라우저에만 저장됩니다 · 2026-11-13 기준</p></body>
+</html>
