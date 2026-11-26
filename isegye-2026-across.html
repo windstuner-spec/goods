@@ -63,6 +63,11 @@ html.ui-bar-off .ui-show{display:block}
 .tbar h1{font-size:16.5px;margin:0;flex:1;font-weight:700;min-width:0;
          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tbar .u{font-size:12px;color:#c6cede;flex:none}
+.tbar{position:relative}
+.tbar .tmid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;white-space:nowrap;font-size:12.5px;color:#c6cede}
+.tbar .tmid a{padding:5px 12px;border:1px solid rgba(226,199,142,.45);border-radius:99px}
+.tbar .tmid a:hover{border-color:#fff}
+@media (max-width:900px){.tbar .tmid{display:none}}
 .tbar a{color:var(--gold2);font-size:12.5px;text-decoration:none;font-weight:600;flex:none}
 .tbar a:hover{color:#fff}
 .tabs{max-width:var(--page-max);margin:0 auto;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
@@ -267,7 +272,7 @@ body:is(.home,.app-divstat,.app-music,.app-ev,.app-train) :is(input:not([type]),
 <div class="top">
   <div class="tbar">
     <span class="mark">🛍</span>    <h1>굿즈 계산기</h1>
-                  
+                      
             <button type="button" class="ui-hide" title="상단 띠 숨기기 — 위 가장자리의 ▾ 로 다시 보입니다" aria-label="상단 띠 숨기기">▴</button>
   </div>
   </div>
